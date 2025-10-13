@@ -1,0 +1,112 @@
+version: '3.9'
+services:
+  url-shortener-postgres:
+    image: postgres:15
+    container_name: url-shortener-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: url-shorts
+    volumes:
+      - ./infrastructure/databases/url-shorts:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -p 5432" ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  url-shortener-postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: url-shortener-postgres-exporter
+    depends_on:
+      url-shortener-postgres:
+        condition: service_healthy
+    environment:
+      DATA_SOURCE_NAME: postgresql://postgres:root@url-shortener-postgres:5432/postgres?sslmode=disable
+    ports:
+      - "9188:9187"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "http://localhost:9090/-/ready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  loki:
+    image: grafana/loki:2.9.2
+    container_name: loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./infrastructure/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:3100/ready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      alloy:
+        condition: service_started
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_METRICS_ENABLED: "true"
+    volumes:
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  alloy:
+    image: grafana/alloy:latest
+    container_name: alloy
+    user: root
+    ports:
+      - "9080:9080" # HTTP interface
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP http
+    volumes:
+      - ./infrastructure/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/log:/var/log:ro
+    environment:
+      GRAFANA_LOKI_URL: http://loki:3100/loki/api/v1/push
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:9080
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+
+  # analytics-postgres
+  # analytics-postgres-exporter
+  # nexus
+  # kafka
+  # redis
+
+  # url-shortener-service
+  # analytics-service
