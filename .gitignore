@@ -39,3 +39,8 @@ out/
 .DS_Store
 .qodo
 .zencoder
+/infrastructure/redis/redis-data/
+/infrastructure/redis/zookeeper/
+**/pgdata/**
+**/redis-data/**
+**/logs/**

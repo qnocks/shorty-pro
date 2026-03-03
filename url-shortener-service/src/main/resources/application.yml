@@ -1,3 +1,85 @@
+server:
+  port: 8082
+
+logging:
+  level:
+    com.qnocks.url_shortener_service: DEBUG
+
 spring:
   application:
     name: url-shortener-service
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5434}/url-shorts
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASS:root}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 10
+      idle-timeout: 30000
+      max-lifetime: 600000
+      connection-timeout: 20000
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+  cache:
+    type: redis
+    redis:
+      time-to-live: 86400000
+      cache-null-values: false
+      use-key-prefix: true
+      key-prefix: "url:"
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 5
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        delivery.timeout.ms: 120000
+        request.timeout.ms: 30000
+        spring.json.add.type.headers: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,caches,prometheus
+  endpoint:
+    prometheus:
+      enabled: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger
+    enabled: true
+  api-docs:
+    path: /api-docs
+    enabled: true
+    syntax-highlight:
+      activated: true
+
+app:
+  openapi:
+    title: URL Shortener Service
+    version: 1.0.0
+    description: URL Shortener Service
+    contact-name: qnocks
+    contact-email: qnocks@qnocks.com
+  exception:
+    trace: true
+  kafka:
+    topics:
+      url-click-events:
+        name: ${KAFKA_CLICK_EVENTS_TOPIC:url-click-events-topic}
+        partitions: ${KAFKA_CLICK_EVENTS_PARTITIONS:5}
+        replicas: ${KAFKA_CLICK_EVENTS_REPLICAS:1}

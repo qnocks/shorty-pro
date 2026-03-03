@@ -1,5 +1,8 @@
-version: '3.9'
 services:
+
+  # ====================================================================================================================
+  # Databases
+  # ====================================================================================================================
   url-shortener-postgres:
     image: postgres:15
     container_name: url-shortener-postgres
@@ -8,7 +11,7 @@ services:
       POSTGRES_PASSWORD: root
       POSTGRES_DB: url-shorts
     volumes:
-      - ./infrastructure/databases/url-shorts:/docker-entrypoint-initdb.d:ro
+      - ./url-shortener-service/pgdata:/var/lib/postgresql/data
     ports:
       - "5434:5432"
     healthcheck:
@@ -16,7 +19,195 @@ services:
       interval: 10s
       timeout: 5s
       retries: 20
+    networks:
+      - shorty-net
 
+  analytics-postgres:
+    image: postgres:15
+    container_name: analytics-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: analytics
+    volumes:
+      - ./analytics/pgdata:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -p 5432" ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks:
+      - shorty-net
+ 
+  redis:
+    image: redis:7.2-alpine
+    container_name: url-shortener-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./url-shortener-service/redis-data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - shorty-net
+
+  redisinsight:
+    image: redis/redisinsight:2.44
+    container_name: url-shortener-redisinsight
+    restart: always
+    ports:
+      - "5540:5540"
+    depends_on:
+      redis:
+        condition: service_started
+    volumes:
+      - ./infrastructure/redis/redisinsight-data:/db
+    networks:
+      - shorty-net
+
+  # ====================================================================================================================
+  # Apache Kafka
+  # ====================================================================================================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "22181:2181"
+    networks:
+      - shorty-net
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0  # Use older version that supports ZooKeeper
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: [ "CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092" ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks:
+      - shorty-net
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: shorty-pro
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    networks:
+      - shorty-net
+
+  # ====================================================================================================================
+  # Backends
+  # ====================================================================================================================
+  url-shortener-service:
+    build:
+      context: .
+      dockerfile: url-shortener-service/Dockerfile
+    container_name: url-shortener-service
+    environment:
+      POSTGRES_HOST: url-shortener-postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASS: root
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_METRICS_EXPORTER: none
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      OTEL_RESOURCE_ATTRIBUTES: service.version=1.0.0,deployment.environment=docker
+    ports:
+      - "8082:8082"
+    working_dir: /app
+    depends_on:
+      url-shortener-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-i", "http://localhost:8082/actuator/health" ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks:
+      - shorty-net
+
+  analytics-service:
+    build:
+      context: .
+      dockerfile: analytics-service/Dockerfile
+    container_name: analytics-service
+    environment:
+      POSTGRES_HOST: analytics-postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASS: root
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_CLICK_EVENTS_GROUP_ID: analytics-service
+      KAFKA_CLICK_EVENTS_TOPIC: url-click-events-topic
+      KAFKA_CLICK_EVENTS_DLT_TOPIC: url-click-events-topic.dlt
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_METRICS_EXPORTER: none
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      OTEL_RESOURCE_ATTRIBUTES: service.version=1.0.0,deployment.environment=docker
+    ports:
+      - "8081:8081"
+    working_dir: /app
+    depends_on:
+      analytics-postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-i", "http://localhost:8081/actuator/health" ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks:
+      - shorty-net
+
+  # ====================================================================================================================
+  # Observability
+  # ====================================================================================================================
   url-shortener-postgres-exporter:
     image: prometheuscommunity/postgres-exporter:latest
     container_name: url-shortener-postgres-exporter
@@ -24,9 +215,43 @@ services:
       url-shortener-postgres:
         condition: service_healthy
     environment:
-      DATA_SOURCE_NAME: postgresql://postgres:root@url-shortener-postgres:5432/postgres?sslmode=disable
+      DATA_SOURCE_NAME: postgresql://postgres:root@url-shortener-postgres:5432/url-shorts?sslmode=disable
     ports:
       - "9188:9187"
+    networks:
+      - shorty-net
+
+  analytics-postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: analytics-postgres-exporter
+    depends_on:
+      url-shortener-postgres:
+        condition: service_healthy
+    environment:
+      DATA_SOURCE_NAME: postgresql://postgres:root@analytics-postgres:5432/analytics?sslmode=disable
+    ports:
+      - "9189:9187"
+    networks:
+      - shorty-net
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter
+    container_name: kafka-exporter
+    ports:
+      - "9308:9308"
+    restart: unless-stopped
+    command:
+      - "--kafka.server=kafka:9092"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:9308/metrics" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - shorty-net
 
   prometheus:
     image: prom/prometheus:latest
@@ -40,6 +265,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 20
+    networks:
+      - shorty-net
 
   loki:
     image: grafana/loki:2.9.2
@@ -53,6 +280,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 20
+    networks:
+      - shorty-net
 
   grafana:
     image: grafana/grafana:latest
@@ -80,6 +309,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 20
+    networks:
+      - shorty-net
 
   alloy:
     image: grafana/alloy:latest
@@ -101,12 +332,25 @@ services:
       - --server.http.listen-addr=0.0.0.0:9080
       - --storage.path=/var/lib/alloy/data
       - /etc/alloy/config.alloy
+    networks:
+      - shorty-net
 
-  # analytics-postgres
-  # analytics-postgres-exporter
-  # nexus
-  # kafka
-  # redis
+networks:
+  shorty-net:
+    driver: bridge
 
-  # url-shortener-service
-  # analytics-service
+volumes:
+  redis-data:
+    driver: local
+  redisinsight_data:
+    driver: local
+  zookeeper-data:
+    driver: local
+  zookeeper-logs:
+    driver: local
+  kafka-data:
+    driver: local
+  loki_data:
+  loki_chunks:
+  loki_index:
+  loki_rules:

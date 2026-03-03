@@ -11,12 +11,12 @@ scrape_configs:
   - job_name: analytics-service
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: [ 'analytics-service:8091' ]
+      - targets: [ 'analytics-service:8081' ]
 
   - job_name: url-shortener-service
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: [ 'url-shortener-service:8092' ]
+      - targets: [ 'url-shortener-service:8082' ]
 
   - job_name: grafana
     metrics_path: /metrics
@@ -37,4 +37,10 @@ scrape_configs:
     static_configs:
       - targets: [ 'url-shortener-postgres-exporter:9187' ]
 
-# todo: add analytics-service-postgres
+  - job_name: analytics-service-postgres
+    static_configs:
+      - targets: [ 'analytics-postgres-exporter:9187' ]
+
+  - job_name: 'kafka-exporter'
+    static_configs:
+      - targets: [ 'kafka-exporter:9308' ]
