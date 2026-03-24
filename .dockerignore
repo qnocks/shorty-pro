@@ -1,0 +1,20 @@
+.git
+.gitignore
+.idea
+.gradle
+**/build
+**/out
+**/.DS_Store
+
+# Local runtime/state data that must never be in image build context
+**/pgdata
+**/redis-data
+**/redisinsight-data
+analytics/pgdata
+url-shortener-service/pgdata
+url-shortener-service/redis-data
+infrastructure/redis/redisinsight-data
+
+# Logs and temp
+**/*.log
+tmp

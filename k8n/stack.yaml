@@ -1,0 +1,841 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+type: Opaque
+stringData:
+  username: postgres
+  password: root
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: url-shortener-postgres
+spec:
+  selector:
+    app: url-shortener-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: url-shortener-postgres
+spec:
+  serviceName: url-shortener-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: url-shortener-postgres
+  template:
+    metadata:
+      labels:
+        app: url-shortener-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+            - name: POSTGRES_DB
+              value: url-shorts
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U postgres -d url-shorts -p 5432"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U postgres -d url-shorts -p 5432"]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-postgres
+spec:
+  selector:
+    app: analytics-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: analytics-postgres
+spec:
+  serviceName: analytics-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: analytics-postgres
+  template:
+    metadata:
+      labels:
+        app: analytics-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+            - name: POSTGRES_DB
+              value: analytics
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U postgres -d analytics -p 5432"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U postgres -d analytics -p 5432"]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.2-alpine
+          ports:
+            - containerPort: 6379
+          args: ["redis-server", "--appendonly", "yes"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redisinsight
+spec:
+  type: NodePort
+  selector:
+    app: redisinsight
+  ports:
+    - name: http
+      port: 5540
+      targetPort: 5540
+      nodePort: 30540
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redisinsight
+spec:
+  serviceName: redisinsight
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redisinsight
+  template:
+    metadata:
+      labels:
+        app: redisinsight
+    spec:
+      containers:
+        - name: redisinsight
+          image: redis/redisinsight:2.44
+          ports:
+            - containerPort: 5540
+          volumeMounts:
+            - name: data
+              mountPath: /db
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper
+spec:
+  selector:
+    app: zookeeper
+  ports:
+    - name: zk
+      port: 2181
+      targetPort: 2181
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zookeeper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zookeeper
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: zookeeper
+          image: confluentinc/cp-zookeeper:7.4.0
+          ports:
+            - containerPort: 2181
+          env:
+            - name: ZOOKEEPER_CLIENT_PORT
+              value: "2181"
+            - name: ZOOKEEPER_TICK_TIME
+              value: "2000"
+          readinessProbe:
+            tcpSocket:
+              port: 2181
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 2181
+            initialDelaySeconds: 20
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+spec:
+  selector:
+    app: kafka
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: 9092
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: kafka
+          image: confluentinc/cp-kafka:7.4.0
+          ports:
+            - containerPort: 9092
+          env:
+            - name: KAFKA_BROKER_ID
+              value: "1"
+            - name: KAFKA_ZOOKEEPER_CONNECT
+              value: zookeeper:2181
+            - name: KAFKA_LISTENERS
+              value: PLAINTEXT://0.0.0.0:9092
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: PLAINTEXT://kafka:9092
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: PLAINTEXT:PLAINTEXT
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: PLAINTEXT
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+          readinessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-ui
+spec:
+  type: NodePort
+  selector:
+    app: kafka-ui
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      nodePort: 30080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-ui
+  template:
+    metadata:
+      labels:
+        app: kafka-ui
+    spec:
+      containers:
+        - name: kafka-ui
+          image: provectuslabs/kafka-ui:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: KAFKA_CLUSTERS_0_NAME
+              value: shorty-pro
+            - name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS
+              value: kafka:9092
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: url-shortener-service
+spec:
+  type: NodePort
+  selector:
+    app: url-shortener-service
+  ports:
+    - name: http
+      port: 8082
+      targetPort: 8082
+      nodePort: 30082
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: url-shortener-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: url-shortener-service
+  template:
+    metadata:
+      labels:
+        app: url-shortener-service
+    spec:
+      initContainers:
+        - name: wait-for-deps
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z url-shortener-postgres 5432; do sleep 2; done
+              until nc -z redis 6379; do sleep 2; done
+              until nc -z kafka 9092; do sleep 2; done
+      containers:
+        - name: app
+          image: shorty/url-shortener-service:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8082
+          env:
+            - name: POSTGRES_HOST
+              value: url-shortener-postgres
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: username
+            - name: POSTGRES_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+            - name: REDIS_HOST
+              value: redis
+            - name: REDIS_PORT
+              value: "6379"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: kafka:9092
+            - name: OTEL_TRACES_EXPORTER
+              value: none
+            - name: OTEL_METRICS_EXPORTER
+              value: none
+            - name: OTEL_LOGS_EXPORTER
+              value: none
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            initialDelaySeconds: 90
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            initialDelaySeconds: 120
+            periodSeconds: 20
+            timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-service
+spec:
+  type: NodePort
+  selector:
+    app: analytics-service
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081
+      nodePort: 30081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: analytics-service
+  template:
+    metadata:
+      labels:
+        app: analytics-service
+    spec:
+      initContainers:
+        - name: wait-for-deps
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z analytics-postgres 5432; do sleep 2; done
+              until nc -z kafka 9092; do sleep 2; done
+      containers:
+        - name: app
+          image: shorty/analytics-service:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8081
+          env:
+            - name: POSTGRES_HOST
+              value: analytics-postgres
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: username
+            - name: POSTGRES_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: kafka:9092
+            - name: KAFKA_CLICK_EVENTS_GROUP_ID
+              value: analytics-service
+            - name: KAFKA_CLICK_EVENTS_TOPIC
+              value: url-click-events-topic
+            - name: KAFKA_CLICK_EVENTS_DLT_TOPIC
+              value: url-click-events-topic.dlt
+            - name: OTEL_TRACES_EXPORTER
+              value: none
+            - name: OTEL_METRICS_EXPORTER
+              value: none
+            - name: OTEL_LOGS_EXPORTER
+              value: none
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            initialDelaySeconds: 90
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            initialDelaySeconds: 120
+            periodSeconds: 20
+            timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: url-shortener-postgres-exporter
+spec:
+  selector:
+    app: url-shortener-postgres-exporter
+  ports:
+    - name: metrics
+      port: 9187
+      targetPort: 9187
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: url-shortener-postgres-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: url-shortener-postgres-exporter
+  template:
+    metadata:
+      labels:
+        app: url-shortener-postgres-exporter
+    spec:
+      containers:
+        - name: exporter
+          image: prometheuscommunity/postgres-exporter:latest
+          ports:
+            - containerPort: 9187
+          env:
+            - name: DATA_SOURCE_NAME
+              value: postgresql://postgres:root@url-shortener-postgres:5432/url-shorts?sslmode=disable
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-postgres-exporter
+spec:
+  selector:
+    app: analytics-postgres-exporter
+  ports:
+    - name: metrics
+      port: 9187
+      targetPort: 9187
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-postgres-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: analytics-postgres-exporter
+  template:
+    metadata:
+      labels:
+        app: analytics-postgres-exporter
+    spec:
+      containers:
+        - name: exporter
+          image: prometheuscommunity/postgres-exporter:latest
+          ports:
+            - containerPort: 9187
+          env:
+            - name: DATA_SOURCE_NAME
+              value: postgresql://postgres:root@analytics-postgres:5432/analytics?sslmode=disable
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-exporter
+spec:
+  selector:
+    app: kafka-exporter
+  ports:
+    - name: metrics
+      port: 9308
+      targetPort: 9308
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-exporter
+  template:
+    metadata:
+      labels:
+        app: kafka-exporter
+    spec:
+      containers:
+        - name: exporter
+          image: danielqsj/kafka-exporter:latest
+          args:
+            - --kafka.server=kafka:9092
+          ports:
+            - containerPort: 9308
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+spec:
+  type: NodePort
+  selector:
+    app: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090
+      nodePort: 30900
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:latest
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus/prometheus.yml
+              subPath: prometheus.yml
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+spec:
+  selector:
+    app: loki
+  ports:
+    - name: http
+      port: 3100
+      targetPort: 3100
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loki
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loki
+  template:
+    metadata:
+      labels:
+        app: loki
+    spec:
+      containers:
+        - name: loki
+          image: grafana/loki:2.9.2
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+          args:
+            - -config.file=/etc/loki/loki-config.yaml
+          ports:
+            - containerPort: 3100
+          volumeMounts:
+            - name: config
+              mountPath: /etc/loki/loki-config.yaml
+              subPath: loki-config.yaml
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3100
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: loki-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+spec:
+  type: NodePort
+  selector:
+    app: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      nodePort: 30300
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_SECURITY_ADMIN_USER
+              value: admin
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: admin
+            - name: GF_METRICS_ENABLED
+              value: "true"
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources/datasources.yaml
+              subPath: datasources.yaml
+            - name: dashboards-provider
+              mountPath: /etc/grafana/provisioning/dashboards/dashboards.yml
+              subPath: dashboards.yml
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards/postgres-overview.json
+              subPath: postgres-overview.json
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboards-provider
+          configMap:
+            name: grafana-dashboards-provider
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
