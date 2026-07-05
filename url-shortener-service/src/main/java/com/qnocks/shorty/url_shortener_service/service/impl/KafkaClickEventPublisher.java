@@ -1,6 +1,7 @@
 package com.qnocks.shorty.url_shortener_service.service.impl;
 
 import com.qnocks.shorty.url_shortener_service.config.KafkaTopicsProperties;
+import io.micrometer.observation.annotation.Observed;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -17,6 +18,10 @@ public class KafkaClickEventPublisher {
     private final KafkaTopicsProperties kafkaTopicsProperties;
 
     @Async
+    @Observed(
+            name = "shorty.kafka.producer.publish-click-event",
+            contextualName = "kafka-producer publish click event",
+            lowCardinalityKeyValues = {"publisher", "KafkaClickEventPublisher", "event", "UrlClickEvent"})
     public void publish(UrlClickEvent clickEvent) {
         try {
             kafkaTemplate.send(kafkaTopicsProperties.topic("url-click-events").name(), clickEvent.id(), clickEvent)

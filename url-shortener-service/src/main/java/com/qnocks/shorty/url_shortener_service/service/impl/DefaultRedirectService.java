@@ -2,6 +2,7 @@ package com.qnocks.shorty.url_shortener_service.service.impl;
 
 import com.qnocks.shorty.url_shortener_service.service.RedirectService;
 import com.qnocks.shorty.url_shortener_service.service.UrlService;
+import io.micrometer.observation.annotation.Observed;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +23,10 @@ public class DefaultRedirectService implements RedirectService {
     private final KafkaClickEventPublisher kafkaClickEventPublisher;
 
     @Override
+    @Observed(
+            name = "shorty.redirect.service.get-url",
+            contextualName = "redirect-service getRedirectUrl",
+            lowCardinalityKeyValues = {"service", "DefaultRedirectService", "method", "getRedirectUrl"})
     public String getRedirectUrl(HttpServletRequest request, String shortCode) {
         String originalUrl = urlService.getOriginalUrl(shortCode);
 

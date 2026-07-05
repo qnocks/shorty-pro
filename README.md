@@ -11,7 +11,7 @@ The project consists of two Spring Boot services and a supporting local infrastr
 - PostgreSQL is used for persistent storage.
 - Redis is used to accelerate read-heavy redirect and lookup operations.
 - Kafka transports click events from the redirect flow to the analytics pipeline.
-- Prometheus, Grafana, Loki, Alloy, Kafka UI, and RedisInsight provide local observability and operations tooling.
+- Prometheus, Grafana, Loki, Tempo, Alloy, Kafka UI, and RedisInsight provide local observability and operations tooling.
 
 At a high level, the flow is:
 
@@ -84,6 +84,7 @@ The repository includes two local execution modes:
 - Micrometer + Prometheus registry
 - Grafana
 - Loki
+- Tempo
 - Alloy
 - Docker / Docker Compose
 - Kubernetes / Minikube
@@ -121,6 +122,7 @@ Service ports:
 - `kafka-ui`: `8080`
 - `grafana`: `3000`
 - `prometheus`: `9090`
+- `tempo`: `3200`
 - `redisinsight`: `5540`
 - `url-shortener-postgres`: `5434`
 - `analytics-postgres`: `5435`

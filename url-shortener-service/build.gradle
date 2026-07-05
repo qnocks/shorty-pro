@@ -36,6 +36,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-cache'
     implementation 'org.springframework.kafka:spring-kafka'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
 
     // Persistence
     implementation 'org.flywaydb:flyway-core'
@@ -44,6 +45,11 @@ dependencies {
 
     // Observability
     implementation 'io.micrometer:micrometer-registry-prometheus'
+    implementation 'io.micrometer:micrometer-tracing'
+    implementation 'io.micrometer:micrometer-tracing-bridge-otel'
+    implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
+    implementation 'net.ttddyy.observation:datasource-micrometer-spring-boot:1.4.1'
+    implementation 'net.ttddyy.observation:datasource-micrometer-opentelemetry:1.4.1'
 
     // Helpers
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.14'

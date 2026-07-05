@@ -2,6 +2,8 @@ server:
   port: 8082
 
 logging:
+  pattern:
+    correlation: "[trace_id=%X{traceId:-} span_id=%X{spanId:-}] "
   level:
     com.qnocks.url_shortener_service: DEBUG
 
@@ -37,6 +39,8 @@ spring:
       key-prefix: "url:"
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    template:
+      observation-enabled: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -50,6 +54,9 @@ spring:
         spring.json.add.type.headers: false
 
 management:
+  observations:
+    annotations:
+      enabled: true
   endpoints:
     web:
       exposure:
@@ -57,6 +64,42 @@ management:
   endpoint:
     prometheus:
       enabled: true
+  tracing:
+    enabled: ${TRACING_ENABLED:true}
+    propagation:
+      type: w3c
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/traces}
+  opentelemetry:
+    resource-attributes:
+      service.name: ${spring.application.name}
+      service.version: ${APP_VERSION:0.0.1}
+      deployment.environment: ${DEPLOYMENT_ENVIRONMENT:local}
+
+#jdbc:
+#  datasource-proxy:
+#    enabled: true
+#    type: spring-proxy
+#    include-parameter-values: false
+#    slow-query:
+#      enable-logging: true
+#      threshold: 300
+#  includes:
+#    - QUERY
+#    - CONNECTION
+#  opentelemetry:
+#    enabled: true
+#    spans:
+#      enabled: true
+#    metrics:
+#      enabled: true
+#    analysis:
+#      enabled: true
+#      sanitize:
+#        enabled: true
 
 springdoc:
   swagger-ui:

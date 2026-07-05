@@ -1,6 +1,7 @@
 package com.qnocks.shorty.url_shortener_service.controller;
 
 import com.qnocks.shorty.url_shortener_service.service.RedirectService;
+import io.micrometer.observation.annotation.Observed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -24,6 +25,10 @@ public class RedirectControllerV1 {
     private final RedirectService redirectService;
 
     @GetMapping("/{shortCode}")
+    @Observed(
+            name = "shorty.redirect.controller.redirect",
+            contextualName = "redirect-controller redirectToOriginalUrl",
+            lowCardinalityKeyValues = {"controller", "RedirectControllerV1", "method", "redirectToOriginalUrl"})
     @Operation(summary = "Redirect to original URL", description = "Redirects the client to the original URL associated with the given short code")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "302", description = "Successfully redirected to original URL"),

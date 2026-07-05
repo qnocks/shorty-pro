@@ -2,6 +2,7 @@ package com.qnocks.shorty.url_shortener_service.controller;
 
 import com.qnocks.shorty.url_shortener_service.dto.CreateShortUrlDto;
 import com.qnocks.shorty.url_shortener_service.service.UrlService;
+import io.micrometer.observation.annotation.Observed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -28,6 +29,10 @@ public class UrlControllerV1 {
     private final UrlService urlService;
 
     @PostMapping
+    @Observed(
+            name = "shorty.url.controller.shorten",
+            contextualName = "url-controller shortenUrl",
+            lowCardinalityKeyValues = {"controller", "UrlControllerV1", "method", "shortenUrl"})
     @Operation(summary = "Create a shortened URL", description = "Generates a shortened URL for the provided original URL")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Successfully created shortened URL",
@@ -39,6 +44,10 @@ public class UrlControllerV1 {
     }
 
     @GetMapping
+    @Observed(
+            name = "shorty.url.controller.get-original",
+            contextualName = "url-controller getOriginalUrl",
+            lowCardinalityKeyValues = {"controller", "UrlControllerV1", "method", "getOriginalUrl"})
     @Operation(summary = "Get original URL", description = "Retrieves the original URL for a given shortened URL")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Successfully retrieved original URL",

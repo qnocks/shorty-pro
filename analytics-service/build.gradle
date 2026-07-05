@@ -41,6 +41,9 @@ dependencies {
 
     // Observability
     implementation 'io.micrometer:micrometer-registry-prometheus'
+    implementation 'io.micrometer:micrometer-tracing'
+    implementation 'io.micrometer:micrometer-tracing-bridge-otel'
+    implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
 
     // Helper
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'

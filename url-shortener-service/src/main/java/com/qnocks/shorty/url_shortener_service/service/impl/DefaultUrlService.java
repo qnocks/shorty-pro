@@ -5,6 +5,7 @@ import com.qnocks.shorty.url_shortener_service.entity.UrlMapping;
 import com.qnocks.shorty.url_shortener_service.repository.UrlMappingRepository;
 import com.qnocks.shorty.url_shortener_service.service.KeyGenerator;
 import com.qnocks.shorty.url_shortener_service.service.UrlService;
+import io.micrometer.observation.annotation.Observed;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CachePut;
@@ -27,6 +28,10 @@ public class DefaultUrlService implements UrlService {
     private final UrlMappingRepository urlMappingRepository;
 
     @Override
+    @Observed(
+            name = "shorty.url.service.shorten",
+            contextualName = "url-service shortenUrl",
+            lowCardinalityKeyValues = {"service", "DefaultUrlService", "method", "shortenUrl"})
     public String shortenUrl(CreateShortUrlDto createShortUrlDto) {
         var originalUrl = createShortUrlDto.url();
 
@@ -50,11 +55,16 @@ public class DefaultUrlService implements UrlService {
                 .build();
 
         urlMappingRepository.save(urlMapping);
+        log.info("Created shorten url for target {}", createShortUrlDto.url());
 
         return urlMapping.getShortUrl();
     }
 
     @Override
+    @Observed(
+            name = "shorty.url.service.get-original",
+            contextualName = "url-service getOriginalUrl",
+            lowCardinalityKeyValues = {"service", "DefaultUrlService", "method", "getOriginalUrl"})
     @Cacheable(value = "originalUrl", key = "#shortKey", unless = "#result == null")
     public String getOriginalUrl(String shortKey) {
         if (!StringUtils.hasText(shortKey)) {
@@ -74,6 +84,10 @@ public class DefaultUrlService implements UrlService {
      * @param originalUrl the original URL
      */
     @CachePut(value = "originalUrl", key = "#shortKey")
+    @Observed(
+            name = "shorty.url.service.cache-mapping",
+            contextualName = "url-service cacheUrlMapping",
+            lowCardinalityKeyValues = {"service", "DefaultUrlService", "method", "cacheUrlMapping"})
     public String cacheUrlMapping(String shortKey, String originalUrl) {
         log.debug("Caching URL mapping: {} -> {}", shortKey, originalUrl);
         return originalUrl;

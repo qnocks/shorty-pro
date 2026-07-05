@@ -4,7 +4,7 @@ DOCKER_COMPOSE = docker-compose
 DB_SERVICES = url-shortener-postgres analytics-postgres redis redisinsight
 APP_SERVICES = url-shortener-service analytics-service
 KAFKA_SERVICES = zookeeper kafka kafka-ui
-INFRA_SERVICES = url-shortener-postgres-exporter analytics-postgres-exporter kafka-exporter prometheus loki grafana alloy
+INFRA_SERVICES = url-shortener-postgres-exporter analytics-postgres-exporter kafka-exporter prometheus loki grafana alloy tempo
 
 # Main commands
 start:

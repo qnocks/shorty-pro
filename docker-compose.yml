@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: root
       POSTGRES_DB: url-shorts
     volumes:
-      - ./url-shortener-service/pgdata:/var/lib/postgresql/data
+      - ./infrastructure/db/url-shortener-postgres/pgdata:/var/lib/postgresql/data
     ports:
       - "5434:5432"
     healthcheck:
@@ -30,7 +30,7 @@ services:
       POSTGRES_PASSWORD: root
       POSTGRES_DB: analytics
     volumes:
-      - ./analytics/pgdata:/var/lib/postgresql/data
+      - ./infrastructure/db/analytics-postgres/pgdata:/var/lib/postgresql/data
     ports:
       - "5435:5432"
     healthcheck:
@@ -41,13 +41,13 @@ services:
     networks:
       - shorty-net
  
-  redis:
+  url-shortener-redis:
     image: redis:7.2-alpine
     container_name: url-shortener-redis
     ports:
       - "6379:6379"
     volumes:
-      - ./url-shortener-service/redis-data:/data
+      - ./infrastructure/db/url-shortener-redis/redis-data:/data
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -71,10 +71,10 @@ services:
     ports:
       - "5540:5540"
     depends_on:
-      redis:
+      url-shortener-redis:
         condition: service_started
     volumes:
-      - ./infrastructure/redis/redisinsight-data:/db
+      - ./infrastructure/db/url-shortener-redis/redisinsight-data:/db
     networks:
       - shorty-net
 
@@ -142,7 +142,7 @@ services:
       POSTGRES_PORT: 5432
       POSTGRES_USER: postgres
       POSTGRES_PASS: root
-      REDIS_HOST: redis
+      REDIS_HOST: url-shortener-redis
       REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
@@ -157,7 +157,7 @@ services:
     depends_on:
       url-shortener-postgres:
         condition: service_healthy
-      redis:
+      url-shortener-redis:
         condition: service_healthy
       kafka:
         condition: service_healthy
@@ -283,6 +283,18 @@ services:
     networks:
       - shorty-net
 
+  tempo:
+    image: grafana/tempo:2.4.1
+    container_name: tempo
+    command: [ "-config.file=/etc/tempo/tempo.yaml" ]
+    volumes:
+      - ./infrastructure/tempo/tempo.yaml:/etc/tempo/tempo.yaml
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"
+    networks:
+      - shorty-net
+
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -294,6 +306,8 @@ services:
         condition: service_healthy
       loki:
         condition: service_healthy
+      tempo:
+        condition: service_started
       alloy:
         condition: service_started
     environment:
@@ -354,3 +368,4 @@ volumes:
   loki_chunks:
   loki_index:
   loki_rules:
+  tempo_data:

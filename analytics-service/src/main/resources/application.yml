@@ -2,6 +2,8 @@ server:
   port: 8081
 
 logging:
+  pattern:
+    correlation: "[trace_id=%X{traceId:-} span_id=%X{spanId:-}] "
   level:
     com.qnocks.analytics_service: DEBUG
 
@@ -23,6 +25,8 @@ spring:
     open-in-view: false
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    template:
+      observation-enabled: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -43,6 +47,7 @@ spring:
     listener:
       ack-mode: record
       missing-topics-fatal: false
+      observation-enabled: true
 
 management:
   endpoints:
@@ -52,6 +57,20 @@ management:
   endpoint:
     prometheus:
       enabled: true
+  tracing:
+    enabled: ${TRACING_ENABLED:true}
+    propagation:
+      type: w3c
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/traces}
+  opentelemetry:
+    resource-attributes:
+      service.name: ${spring.application.name}
+      service.version: ${APP_VERSION:0.0.1}
+      deployment.environment: ${DEPLOYMENT_ENVIRONMENT:local}
 
 springdoc:
   swagger-ui:
